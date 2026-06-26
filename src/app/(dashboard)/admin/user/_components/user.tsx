@@ -11,27 +11,43 @@ import { HEADER_TABLE_USER } from "@/constants/user-constant";
 import { useMemo } from "react";
 import DropdownAction from "@/components/common/dropdown-action";
 import { Pencil, Trash2 } from "lucide-react";
+import useDataTable from "@/hooks/use-datatable";
+import DialogCreateUser from "./dialog-create-user";
 
 export default function UserManagement() {
   const supabase = createClient();
-  const { data: users, isLoading } = useQuery({
-    queryKey: ["users"],
+  const {
+    currentPage,
+    currentLimit,
+    currentSearch,
+    handleChangeLimit,
+    handleChangePage,
+    handleChangeSearch,
+  } = useDataTable();
+  const {
+    data: users,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ["users", currentPage, currentLimit, currentSearch],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const result = await supabase
         .from("profiles")
         .select("*", { count: "exact" })
-        .order("created_at");
+        .range((currentPage - 1) * currentLimit, currentPage * currentLimit - 1)
+        .order("created_at")
+        .ilike("name", `%${currentSearch}%`);
 
-      if (error)
+      if (result.error)
         toast.error("Get User data failed", {
-          description: error.message,
+          description: result.error.message,
         });
-      return data;
+      return result;
     },
   });
 
   const filteredData = useMemo(() => {
-    return (users || []).map((user, index) => {
+    return (users?.data || []).map((user, index) => {
       return [
         index + 1,
         user.id,
@@ -64,16 +80,26 @@ export default function UserManagement() {
     });
   }, [users]);
 
+  const totalPages = useMemo(() => {
+    return users && users.count !== null
+      ? Math.ceil(users.count / currentLimit)
+      : 0;
+  }, [users]);
+
   return (
     <div className="w-full">
       <div className="flex flex-col lg:flex-row mb-4 gap-2 justify-between w-full">
         <h1 className="text-2xl font-bold">User Management</h1>
         <div className="flex gap-2">
-          <Input placeholder="Search by name" />
+          <Input
+            placeholder="Search by name"
+            onChange={(e) => handleChangeSearch(e.target.value)}
+          />
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline">Create</Button>
             </DialogTrigger>
+            <DialogCreateUser refetch={refetch} />
           </Dialog>
         </div>
       </div>
@@ -81,6 +107,11 @@ export default function UserManagement() {
         header={HEADER_TABLE_USER}
         data={filteredData}
         isLoading={isLoading}
+        totalPages={totalPages}
+        currentPage={currentPage}
+        currentLimit={currentLimit}
+        onChangePage={handleChangePage}
+        onChangeLimit={handleChangeLimit}
       />
     </div>
   );
