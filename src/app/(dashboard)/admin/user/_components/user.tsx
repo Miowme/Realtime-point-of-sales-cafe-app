@@ -1,18 +1,21 @@
 "use client";
 
+import DataTable from "@/components/common/data-table";
+import DropdownAction from "@/components/common/dropdown-action";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { HEADER_TABLE_USER } from "@/constants/user-constant";
+import useDataTable from "@/hooks/use-datatable";
 import { createClient } from "@/lib/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
-import DataTable from "@/components/common/data-table";
-import { HEADER_TABLE_USER } from "@/constants/user-constant";
-import { useMemo } from "react";
-import DropdownAction from "@/components/common/dropdown-action";
 import { Pencil, Trash2 } from "lucide-react";
-import useDataTable from "@/hooks/use-datatable";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import DialogCreateUser from "./dialog-create-user";
+import { Profile } from "@/types/auth";
+import DialogUpdateUser from "./dialog-update-user";
+import DialogDeleteUser from "./dialog-delete-user";
 
 export default function UserManagement() {
   const supabase = createClient();
@@ -20,8 +23,8 @@ export default function UserManagement() {
     currentPage,
     currentLimit,
     currentSearch,
-    handleChangeLimit,
     handleChangePage,
+    handleChangeLimit,
     handleChangeSearch,
   } = useDataTable();
   const {
@@ -42,14 +45,24 @@ export default function UserManagement() {
         toast.error("Get User data failed", {
           description: result.error.message,
         });
+
       return result;
     },
   });
 
+  const [selectedAction, setSelectedAction] = useState<{
+    data: Profile;
+    type: "update" | "delete";
+  } | null>(null);
+
+  const handleChangeAction = (open: boolean) => {
+    if (!open) setSelectedAction(null);
+  };
+
   const filteredData = useMemo(() => {
     return (users?.data || []).map((user, index) => {
       return [
-        index + 1,
+        currentLimit * (currentPage - 1) + index + 1,
         user.id,
         user.name,
         user.role,
@@ -57,22 +70,32 @@ export default function UserManagement() {
           menu={[
             {
               label: (
-                <span className="flex items-center gap-2">
+                <span className="flex item-center gap-2">
                   <Pencil />
                   Edit
                 </span>
               ),
-              action: () => {},
+              action: () => {
+                setSelectedAction({
+                  data: user,
+                  type: "update",
+                });
+              },
             },
             {
               label: (
-                <span className="flex items-center gap-2">
+                <span className="flex item-center gap-2">
                   <Trash2 className="text-red-400" />
                   Delete
                 </span>
               ),
               variant: "destructive",
-              action: () => {},
+              action: () => {
+                setSelectedAction({
+                  data: user,
+                  type: "delete",
+                });
+              },
             },
           ]}
         />,
@@ -112,6 +135,18 @@ export default function UserManagement() {
         currentLimit={currentLimit}
         onChangePage={handleChangePage}
         onChangeLimit={handleChangeLimit}
+      />
+      <DialogUpdateUser
+        open={selectedAction !== null && selectedAction.type === "update"}
+        refetch={refetch}
+        currentData={selectedAction?.data}
+        handleChangeAction={handleChangeAction}
+      />
+      <DialogDeleteUser
+        open={selectedAction !== null && selectedAction.type === "delete"}
+        refetch={refetch}
+        currentData={selectedAction?.data}
+        handleChangeAction={handleChangeAction}
       />
     </div>
   );

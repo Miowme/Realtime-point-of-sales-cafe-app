@@ -4,3 +4,8 @@ export type FormState = {
   };
   status?: string;
 };
+
+export type Preview = {
+  file: File;
+  displayUrl: string;
+};
