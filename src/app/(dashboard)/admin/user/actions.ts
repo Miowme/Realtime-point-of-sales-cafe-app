@@ -1,24 +1,50 @@
 "use server";
 
+import { uploadFile } from "@/actions/storage-action";
 import { createClient } from "@/lib/supabase/server";
 import { AuthFormState } from "@/types/auth";
 import { createUserSchema } from "@/validations/auth-validation";
 
 export async function createUser(prevState: AuthFormState, formData: FormData) {
-  const validateFields = createUserSchema.safeParse({
+  let validatedFields = createUserSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
     name: formData.get("name"),
     role: formData.get("role"),
-    // avatar_url: formData.get("avatar_url"),
+    avatar_url: formData.get("avatar_url"),
   });
 
-  if (!validateFields.success) {
+  if (!validatedFields.success) {
     return {
       status: "error",
       errors: {
-        ...validateFields.error.flatten().fieldErrors,
+        ...validatedFields.error.flatten().fieldErrors,
         _form: [],
+      },
+    };
+  }
+
+  if (validatedFields.data.avatar_url instanceof File) {
+    const { errors, data } = await uploadFile(
+      "images",
+      "users",
+      validatedFields.data.avatar_url,
+    );
+    if (errors) {
+      return {
+        status: "error",
+        errors: {
+          ...prevState.errors,
+          _form: [...errors._form],
+        },
+      };
+    }
+
+    validatedFields = {
+      ...validatedFields,
+      data: {
+        ...validatedFields.data,
+        avatar_url: data.url,
       },
     };
   }
@@ -26,13 +52,13 @@ export async function createUser(prevState: AuthFormState, formData: FormData) {
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signUp({
-    email: validateFields.data.email,
-    password: validateFields.data.password,
+    email: validatedFields.data.email,
+    password: validatedFields.data.password,
     options: {
       data: {
-        name: validateFields.data.name,
-        role: validateFields.data.role,
-        // avatar_url: validateFields.data.avatar_url,
+        name: validatedFields.data.name,
+        role: validatedFields.data.role,
+        avatar_url: validatedFields.data.avatar_url,
       },
     },
   });
